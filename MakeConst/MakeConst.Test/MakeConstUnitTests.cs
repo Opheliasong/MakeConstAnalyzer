@@ -11,62 +11,244 @@ namespace MakeConst.Test
     [TestClass]
     public class UnitTest : CodeFixVerifier
     {
-
-        //No diagnostics expected to show up
-        [TestMethod]
-        public void TestMethod1()
+        [DataTestMethod]
+        [DataRow(""),
+        DataRow(VariableAssigned),
+        DataRow(AlreadyConst),
+        DataRow(NoInitializer),
+        DataRow(InitializerNotConstant),
+        DataRow(MultipleInitializers)]
+        public void WhenTestCodeelsValidNoDiagnosticTriggered(string testCode)
         {
-            var test = @"";
-
-            VerifyCSharpDiagnostic(test);
+            VerifyCSharpDiagnostic(testCode);
         }
 
-        //Diagnostic and CodeFix both triggered and checked for
-        [TestMethod]
-        public void TestMethod2()
-        {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
+        private const string LocalIntCouldBeConstant = @"
+using System;
 
-    namespace ConsoleApplication1
+namespace MakeConstTest
+{
+    class Program
     {
-        class TypeName
-        {   
+        static void Main(string[] args)
+        {
+            int i = 0;
+            Console.WriteLine(i);
         }
-    }";
+    }
+}";
+
+        private const string LocalIntCouldBeConstantFixed = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            const int i = 0;
+            Console.WriteLine(i);
+        }
+    }
+}";
+
+        private const string VariableAssigned = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            int i = 0;
+            Console.WriteLine(i++);
+        }
+    }
+}";
+        private const string AlreadyConst = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            const int i = 0;
+            Console.WriteLine(i);
+        }
+    }
+}";
+        private const string NoInitializer = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            int i;
+            i = 0;
+            Console.WriteLine(i);
+        }
+    }
+}";
+        private const string InitializerNotConstant = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            int i = DateTime.Now.DayOfYear;
+            Console.WriteLine(i);
+        }
+    }
+}";
+        private const string MultipleInitializers = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            int i = 0, j = DateTime.Now.DayOfYear;
+            Console.WriteLine(i, j);
+        }
+    }
+}";
+        private const string DeclarationIsInvalid = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            int x = ""abc"";
+        }
+    }
+}";
+        private const string ReferenceTypeIsntString = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            object s = ""abc"";
+        }
+    }
+}";
+        private const string ConstantIsString = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            string s = ""abc"";
+        }
+    }
+}";
+
+        private const string ConstantIsStringFixed = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            const string s = ""abc"";
+        }
+    }
+}";
+        private const string DeclarationUsesVar = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var item = 4;
+        }
+    }
+}";
+
+        private const string DeclarationUsesVarFixedHasType = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            const int item = 4;
+        }
+    }
+}";
+        private const string StringDeclarationUsesVar = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var item = ""abc"";
+        }
+    }
+}";
+        private const string StringDeclarationUsesVarFixedHasType = @"
+using System;
+
+namespace MakeConstTest
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            const string item = ""abc"";
+        }
+    }
+}";
+        [DataTestMethod]
+        [DataRow(LocalIntCouldBeConstant, LocalIntCouldBeConstantFixed, 10, 13)]
+        public void WhenDiagnositcIsRaisedFixupdatesCode(string test, string fixText, int line, int column)
+        {
             var expected = new DiagnosticResult
             {
-                Id = "MakeConst",
-                Message = String.Format("Type name '{0}' contains lowercase letters", "TypeName"),
+                Id = MakeConstAnalyzer.DiagnosticId,
+                Message = new LocalizableResourceString(nameof(MakeConst.Resources.AnalyzerMessageFormat),
+                                                        MakeConst.Resources.ResourceManager,
+                                                        typeof(MakeConst.Resources)).ToString(),
                 Severity = DiagnosticSeverity.Warning,
                 Locations =
                     new[] {
-                            new DiagnosticResultLocation("Test0.cs", 11, 15)
+                            new DiagnosticResultLocation("Test0.cs", line, column)
                         }
             };
 
             VerifyCSharpDiagnostic(test, expected);
-
-            var fixtest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-
-    namespace ConsoleApplication1
-    {
-        class TYPENAME
-        {   
-        }
-    }";
-            VerifyCSharpFix(test, fixtest);
+            VerifyCSharpFix(test, fixText);
         }
 
         protected override CodeFixProvider GetCSharpCodeFixProvider()
